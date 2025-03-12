@@ -1,7 +1,7 @@
 # Import python packages
 import streamlit as st
 from snowflake.snowpark.functions import col, when_matched
-import pandas as pd
+
 # Write directly to the app
 st.title(":cup_with_straw: Pending Smoothie Orders. :cup_with_straw:")
 st.write("Orders need to be filled")
@@ -10,26 +10,28 @@ st.write("Orders need to be filled")
 cnx = st.connection("snowflake")
 session = cnx.session()
 
-# Fetch pending orders (where ORDER_FILLED == 0)
-my_dataframe = session.table("smoothies.public.orders").filter(col("ORDER_FILLED") == 0).collect()
+# Fetch pending orders (where ORDER_FILLED == 0) as a Snowpark DataFrame
+my_dataframe = session.table("smoothies.public.orders").filter(col("ORDER_FILLED") == 0)
 
-if my_dataframe:
-    # Convert Snowflake Row object to Pandas DataFrame for editing
-    pd_df = my_dataframe.to_pandas()
+# Convert Snowpark DataFrame to Pandas DataFrame directly (no need for collect())
+pd_df = my_dataframe.to_pandas()
+
+if not pd_df.empty:
+    # Show editable data
     editable_df = st.data_editor(pd_df)
 
     submitted = st.button('Submit')
     if submitted:
-        og_dataset = session.table("smoothies.public.orders")
+        # Create a Snowpark DataFrame from the edited Pandas DataFrame
         edited_dataset = session.create_dataframe(editable_df)
         
         try:
             # Perform the merge operation to update ORDER_FILLED status
-            og_dataset.merge(
+            my_dataframe.merge(
                 edited_dataset,
-                (og_dataset['ORDER_UID'] == edited_dataset['ORDER_UID']),
+                (my_dataframe['ORDER_UID'] == edited_dataset['ORDER_UID']),
                 [when_matched().update({'ORDER_FILLED': edited_dataset['ORDER_FILLED']})]
-            ).collect()  # Collect the result to execute the operation
+            ).collect()  # Execute the operation
             
             st.success('Order updated successfully!', icon='👍')
         except Exception as e:
