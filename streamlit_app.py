@@ -13,7 +13,7 @@ session = cnx.session()
 # Fetch pending orders (where ORDER_FILLED == 0) as a Snowpark DataFrame
 my_dataframe = session.table("smoothies.public.orders").filter(col("ORDER_FILLED") == 0)
 
-# Convert Snowpark DataFrame to Pandas DataFrame directly (no need for collect())
+# Convert Snowpark DataFrame to Pandas DataFrame directly
 pd_df = my_dataframe.to_pandas()
 
 if not pd_df.empty:
@@ -22,15 +22,15 @@ if not pd_df.empty:
 
     submitted = st.button('Submit')
     if submitted:
-        # Create a Snowpark DataFrame from the edited Pandas DataFrame
+        # Re-create the Snowpark DataFrame directly from Pandas DataFrame
         edited_dataset = session.create_dataframe(editable_df)
-        
+
         try:
-            # Perform the merge operation to update ORDER_FILLED status
+            # Perform the merge operation to update ORDER_FILLED status in Snowflake
             my_dataframe.merge(
                 edited_dataset,
-                (my_dataframe['ORDER_UID'] == edited_dataset['ORDER_UID']),
-                [when_matched().update({'ORDER_FILLED': edited_dataset['ORDER_FILLED']})]
+                on="ORDER_UID",  # Ensure the correct column to merge
+                when_matched().update({'ORDER_FILLED': edited_dataset['ORDER_FILLED']})
             ).collect()  # Execute the operation
             
             st.success('Order updated successfully!', icon='👍')
